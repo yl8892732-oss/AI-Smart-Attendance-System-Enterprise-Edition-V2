@@ -10,7 +10,7 @@ from tensorflow.keras.applications import (
     MobileNetV2,
     ResNet50
 )
-from layers import (
+from ArcFace_model.layers import (
     BatchNormalization,
     ArcMarginPenaltyLogists
 )
@@ -93,4 +93,5 @@ def ArcFaceModel(size=None, channels=3, num_classes=None, name='arcface_model',
             logist = NormHead(num_classes=num_classes, w_decay=w_decay)(embds)
         return Model((inputs, labels), logist, name=name)
     else:
+
         return Model(inputs, embds, name=name)
