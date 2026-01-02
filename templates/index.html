@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* 企业级极简美化样式 */
+    .camera-box {
+        border: 12px solid #fff;
+        outline: 1px solid #e2e8f0;
+        border-radius: 30px;
+        overflow: hidden;
+        max-width: 600px;
+        background-color: #000;
+        position: relative;
+    }
+
+    #video {
+        width: 100%;
+        display: block;
+        transform: scaleX(-1); /* 镜像显示 */
+    }
+
+    #status-overlay {
+        background: linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.8));
+        font-weight: 600;
+        padding: 25px 0;
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        color: white;
+        transition: all 0.3s ease;
+    }
+
+    .btn-indigo {
+        background-color: #4f46e5;
+        color: white;
+        border: none;
+    }
+
+    .btn-indigo:hover {
+        background-color: #4338ca;
+        color: white;
+    }
+
+    .btn-action {
+        border-radius: 50px;
+        padding: 12px 35px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    #result-area {
+        min-height: 60px;
+    }
+
+    /* 成功打卡的平滑动画 */
+    .alert-success-custom {
+        background-color: #ecfdf5;
+        border: 1px solid #10b981;
+        color: #065f46;
+        border-radius: 12px;
+        animation: slideUp 0.5s ease-out;
+    }
+
+    @keyframes slideUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+
+<div class="text-center py-4">
+    <div class="camera-box mx-auto shadow-lg">
+        <video id="video" autoplay playsinline></video>
+        <div id="status-overlay">正在初始化摄像头...</div>
+    </div>
+
+    <div class="mt-4">
+        <button id="btn-toggle" onclick="toggleScan()" class="btn btn-indigo btn-action shadow-sm">
+            <i class="bi bi-pause-fill me-2"></i>暂停扫描
+        </button>
+    </div>
+
+    <div id="result-area" class="mx-auto mt-4" style="max-width: 400px;">
+        </div>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const statusOverlay = document.getElementById('status-overlay');
+    const resultArea = document.getElementById('result-area');
+    const btnToggle = document.getElementById('btn-toggle');
+
+    let scanning = true;
+    let intervalId = null;
+
+    // 1. 初始化摄像头：资深程序员采用标准异步流
+    async function initCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: "user",
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                }
+            });
+            video.srcObject = stream;
+            statusOverlay.innerText = "🔍 正在扫描员工面部...";
+            startScanning();
+        } catch (err) {
+            statusOverlay.innerText = "❌ 摄像头开启失败，请检查权限";
+            console.error("Camera Error:", err);
+        }
+    }
+
+    // 2. 抓拍并上传：核心打卡通讯逻辑
+    async function captureAndSend() {
+        if (!scanning) return;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
+
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+        try {
+            const response = await fetch('/api/recognize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imageData })
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                // 成功：显示结果并触发冷却
+                resultArea.innerHTML = `
+                    <div class="alert alert-success-custom p-3 shadow-sm">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        <strong>${data.name}</strong> 打卡成功！
+                    </div>`;
+                statusOverlay.style.background = "rgba(16, 185, 129, 0.8)";
+                statusOverlay.innerText = "✅ 识别成功";
+                tempPause();
+            } else if (data.status === 'cool_down') {
+                statusOverlay.innerText = `☕️ ${data.name}，请勿频繁打卡`;
+            } else if (data.status === 'unknown') {
+                statusOverlay.innerText = "👀 未识别到有效员工";
+            }
+        } catch (err) {
+            console.error("API Error:", err);
+        }
+    }
+
+    // 3. 运行控制逻辑
+    function startScanning() {
+        if (intervalId) clearInterval(intervalId);
+        intervalId = setInterval(captureAndSend, 1500); // 每1.5秒识别一次，平衡性能与准确度
+        scanning = true;
+    }
+
+    function toggleScan() {
+        if (scanning) {
+            scanning = false;
+            clearInterval(intervalId);
+            btnToggle.innerHTML = '<i class="bi bi-play-fill me-2"></i>继续扫描';
+            statusOverlay.innerText = "⏸ 已暂停";
+        } else {
+            btnToggle.innerHTML = '<i class="bi bi-pause-fill me-2"></i>暂停扫描';
+            startScanning();
+        }
+    }
+
+    function tempPause() {
+        // 成功识别后暂停3秒，给员工反应时间，防止重复写入
+        scanning = false;
+        setTimeout(() => {
+            if (btnToggle.innerText.includes("暂停")) { // 只有在非手动暂停的情况下才恢复
+                scanning = true;
+                statusOverlay.style.background = "";
+                statusOverlay.innerText = "🔍 正在扫描员工面部...";
+            }
+        }, 3000);
+    }
+
+    // 启动系统
+    window.onload = initCamera;
+</script>
+{% endblock %}
