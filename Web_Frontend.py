@@ -271,14 +271,13 @@ def report():
 
 @app.route('/history')
 def history():
-    """Route for the History/Gallery page - 修复时间显示问题"""
+    """Route for the History/Gallery page - """
     upload_dir = Config.UPLOAD_DIR
     records = []
     if os.path.exists(upload_dir):
         for f in os.listdir(upload_dir):
             if f.endswith(('.jpg', '.png')):
                 file_path = os.path.join(upload_dir, f)
-                # 获取文件的最后修改时间并格式化
                 mtime = os.path.getmtime(file_path)
                 dt_str = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M')
                 records.append({
@@ -286,7 +285,7 @@ def history():
                     'time': dt_str
                 })
 
-    # 按时间倒序排序，最新的排在前面
+    
     records.sort(key=lambda x: x['time'], reverse=True)
     return render_template('history.html', records=records)
 
